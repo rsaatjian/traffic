@@ -185,6 +185,20 @@ const KNOBS = [
   ['SEED', 'rSEED', 'oSEED', v => `${Math.round(v * 100)}% of spacing`, ID, ID],
 ];
 
+/* Values we have sent but not yet seen echoed back.
+ *
+ * The server broadcasts `params` to everyone after any change, and that echo used to
+ * be written straight back into every slider. Locally the round trip is about a
+ * millisecond so nothing is visible; over a hosted deployment it is ~100 ms, which
+ * means the echo for where the slider WAS lands while you are still dragging and
+ * yanks it backwards. Dragging then fights itself and the control feels stuck.
+ *
+ * So: ignore echoes for a control while our own newer value is still in flight, and
+ * start trusting the server again as soon as it agrees with us (or after a timeout,
+ * so a dropped message cannot wedge the slider forever). */
+const pending = new Map();
+const AGREE = (a, b) => Math.abs((+a) - (+b)) < 1e-6;
+
 function initHostPanel() {
   $('host').hidden = false;
   syncHostInputs();
@@ -192,7 +206,9 @@ function initHostPanel() {
     const el = $(rid);
     el.addEventListener('input', () => {
       $(oid).textContent = fmt(el.value);
-      Net.send({ type: 'admin', action: 'set', key, value: toWire(el.value) });
+      const wire = toWire(el.value);
+      pending.set(key, { value: wire, at: performance.now() });
+      Net.send({ type: 'admin', action: 'set', key, value: wire });
     });
   }
   $('perturb').addEventListener('click', () => Net.send({ type: 'admin', action: 'perturb' }));
@@ -201,9 +217,18 @@ function initHostPanel() {
 
 function syncHostInputs() {
   if (!S.isHost) return;
+  const now = performance.now();
   for (const [key, rid, oid, fmt, , fromWire] of KNOBS) {
     const v = S.params[key];
     if (v === undefined) continue;
+
+    const p = pending.get(key);
+    if (p) {
+      if (AGREE(p.value, v)) pending.delete(key);      // server caught up
+      else if (now - p.at < 2500) continue;            // our newer value is in flight
+      else pending.delete(key);                        // gave up waiting; trust server
+    }
+
     const shown = fromWire(v);
     $(rid).value = shown;
     $(oid).textContent = fmt(shown);

@@ -65,6 +65,32 @@ ELS['rSPREAD'].value = '0.2'; ELS['rSPREAD'].fire('input');
 a = SENT[SENT.length - 1];
 ok(a.key === 'SPREAD' && Math.abs(a.value - 0.2) < 1e-9, `variation knob -> ${JSON.stringify(a)}`);
 ok(String(ELS['regime'].textContent).includes('veh/mi'), `regime hint: ${ELS['regime'].textContent.slice(0,50)}...`);
+// --- a laggy link must not fight the instructor's drag.
+// The server echoes `params` to everyone after each change. Written straight back
+// into the slider, the echo for where it WAS arrives mid-drag over a hosted
+// deployment (~100 ms) and drags it backwards -- the control feels stuck. Locally
+// the round trip hides it completely, so this only ever showed up in production.
+const P = () => ({ L: 400, N: 30, A: 0.6, T: 1.2, V0: 30, SPREAD: 0.12, NOISE: 0.25, SEED: 0.3 });
+for (const v of [40, 45, 50]) {            // the user drags
+  ELS['rN'].value = String(v);
+  ELS['rN'].fire('input');
+}
+ok(Number(ELS['rN'].value) === 50, `slider follows the drag: ${ELS['rN'].value}`);
+for (const v of [40, 45]) {                // stale echoes land afterwards
+  const p = P(); p.N = v;
+  WS.onmessage({ data: JSON.stringify({ type: 'params', params: p }) });
+}
+ok(Number(ELS['rN'].value) === 50,
+   `stale echo did not stomp the slider (is ${ELS['rN'].value}, user left it at 50)`);
+const pNow = P(); pNow.N = 50;
+WS.onmessage({ data: JSON.stringify({ type: 'params', params: pNow }) });
+ok(Number(ELS['rN'].value) === 50, 'matching echo is accepted');
+// and once we agree, the server is authoritative again (e.g. another instructor)
+const pOther = P(); pOther.N = 18;
+WS.onmessage({ data: JSON.stringify({ type: 'params', params: pOther }) });
+ok(Number(ELS['rN'].value) === 18,
+   `server stays authoritative after we are in sync: ${ELS['rN'].value}`);
+
 ELS['perturb'].fire('click');
 ok(SENT[SENT.length - 1].action === 'perturb', 'perturb button');
 ELS['reset'].fire('click');
