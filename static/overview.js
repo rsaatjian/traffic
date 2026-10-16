@@ -196,6 +196,7 @@ const KNOBS = [
   ['SPREAD', 'rSPREAD', 'oSPREAD', v => `±${Math.round(v * 100)}%`, ID, ID],
   ['NOISE', 'rNOISE', 'oNOISE', v => (+v === 0 ? 'off' : `${(+v).toFixed(2)} m/s²`), ID, ID],
   ['SEED', 'rSEED', 'oSEED', v => `${Math.round(v * 100)}% of spacing`, ID, ID],
+  ['TAU', 'rTAU', 'oTAU', v => (+v === 0 ? 'instant' : `${(+v).toFixed(2)} s`), ID, ID],
 ];
 
 /* Values we have sent but not yet seen echoed back.

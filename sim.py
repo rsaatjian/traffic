@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import math
 import random
+from collections import deque
 from dataclasses import dataclass, field
 
 # --- vehicle and road constants -------------------------------------------------
@@ -59,6 +60,14 @@ DELTA = 4         # IDM acceleration exponent
 
 MAX_CARS = 80     # hard ceiling on the ring, however many people turn up
 
+# An accident, as distinct from a nudge: contact made while closing faster than this
+# counts on the crash board. Slow bumping in a stopped queue does not, which keeps the
+# board meaningful. Deliberately NO other consequence -- cars are not immobilised. A
+# stopped wreck is a real bottleneck with an obvious cause, and the entire point of
+# this demo is that the jam has no cause.
+CRASH_SPEED = 4.5   # m/s of closing speed (~10 mph) that counts as a crash
+HIST = 150          # steps of (s, v) kept per car, enough for 2.5 s of delay at 60 Hz
+
 PALETTE = [
     "#4aa3ff", "#ffb14a", "#5fd68a", "#ff6b8a", "#b98cff", "#ffd93d",
     "#4fd6d0", "#ff8f4a", "#8ad25f", "#e05fd6", "#5f8aff", "#d6c14f",
@@ -91,10 +100,25 @@ class Params:
     SPREAD: float = 0.12   # driver-to-driver variation in V0 and T (fraction)
     NOISE: float = 0.25    # acceleration noise, m/s^2 -- imperfect speed-holding
     SEED: float = 0.30     # initial bunching, as a fraction of the mean spacing
+    # Bot reaction time. Plain IDM answers instantly with unlimited braking, so a bot
+    # is physically impossible to rear-end -- brake-checking one does nothing, which
+    # is both unfun and wrong. Real drivers take about a second to react. Delay also
+    # destabilises the ring, which is the same direction the demo already wants.
+    # Bot reaction time. Plain IDM answers instantly with unlimited braking, so a bot
+    # cannot be rear-ended at all -- brake-checking one does nothing. A delay fixes
+    # that, but measurably moves the stability boundary (at 0.5 s a kick at 48 veh/mi
+    # no longer decays, and "responsiveness" stops being monotonic because gain times
+    # delay is its own instability). The phantom jam is the point of this thing, so
+    # the default is 0 and the validated dynamics are untouched. Raise it from the
+    # instructor panel if you want the autopilot rear-endable too.
+    #
+    # Brake-checking another PLAYER works at 0, because people do not auto-brake.
+    TAU: float = 0.0
 
     def as_dict(self) -> dict:
         return {"L": self.L, "N": self.N, "A": self.A, "T": self.T, "V0": self.V0,
-                "SPREAD": self.SPREAD, "NOISE": self.NOISE, "SEED": self.SEED}
+                "SPREAD": self.SPREAD, "NOISE": self.NOISE, "SEED": self.SEED,
+                "TAU": self.TAU}
 
 
 @dataclass
@@ -112,9 +136,10 @@ class Car:
     v0_f: float = 1.0           # this driver's desired speed, as a factor of V0
     t_f: float = 1.0            # this driver's following distance, as a factor of T
     accel: float = 0.0          # last step's acceleration, m/s^2 (drives brake lights)
-    crashes: int = 0            # rear-ends by whoever is currently in this seat
+    crashes: int = 0            # accidents by whoever is currently in this seat
     in_contact: bool = False    # was touching the car ahead on the PREVIOUS step
     last_bump_t: float = -99.0  # sim time of the last counted crash
+    hist: deque = field(default_factory=lambda: deque(maxlen=HIST))  # (s, v) trail
 
 
 class Ring:
@@ -274,7 +299,8 @@ class Ring:
         """Live-tune a driver parameter. Does not disturb the current state, so the
         class can watch a running sim cross the stability boundary in real time."""
         lo_hi = {"A": (0.2, 3.0), "T": (0.4, 3.0), "V0": (5.0, 35.0),
-                 "SPREAD": (0.0, 0.4), "NOISE": (0.0, 1.0), "SEED": (0.0, 0.45)}
+                 "SPREAD": (0.0, 0.4), "NOISE": (0.0, 1.0), "SEED": (0.0, 0.45),
+                 "TAU": (0.0, 2.2)}
         if key in lo_hi:
             lo, hi = lo_hi[key]
             setattr(self.p, key, max(lo, min(hi, float(value))))
@@ -301,10 +327,28 @@ class Ring:
 
     # -- physics ------------------------------------------------------------------
 
-    def _idm_accel(self, car: Car, lead: Car, gap: float) -> float:
+    def _delayed(self, car: Car, steps: int) -> tuple[float, float]:
+        """This car's (position, speed) as it was `steps` ago, or its oldest known."""
+        if steps <= 0 or not car.hist:
+            return car.s, car.v
+        return car.hist[-min(steps, len(car.hist))]
+
+    def _idm_accel(self, car: Car, lead: Car, gap: float, delay: int = 0) -> float:
+        """IDM, optionally evaluated on the world as it looked `delay` steps ago.
+
+        The driver's own speed is taken as current -- you always know how fast you
+        are going -- but the gap and the leader's speed are what they were when you
+        last looked. That is what makes a sudden brake ahead land late.
+        """
         p = self.p
+        if delay > 0:
+            my_s, _ = self._delayed(car, delay)
+            lead_s, lead_v = self._delayed(lead, delay)
+            gap = (lead_s - my_s) % p.L - CAR_LEN
+        else:
+            lead_v = lead.v
         gap = max(gap, 0.1)                   # keep the 1/gap^2 term finite
-        dv = car.v - lead.v
+        dv = car.v - lead_v
         v0 = p.V0 * car.v0_f                  # this driver's own preferences
         t = p.T * car.t_f
         s_star = S0 + max(0.0, car.v * t + car.v * dv / (2.0 * math.sqrt(p.A * B_COMF)))
@@ -320,6 +364,7 @@ class Ring:
         # Accelerations are all computed from the *same* snapshot: a synchronous
         # update. Reading half-updated neighbours would silently change the dynamics.
         gaps = self.gaps()
+        delay = min(HIST - 1, int(round(self.p.TAU / dt))) if self.p.TAU > 0 else 0
         accels = [0.0] * n
         for i, car in enumerate(cars):
             lead = cars[(i + 1) % n]
@@ -329,7 +374,7 @@ class Ring:
                 pedal = car.u * (A_MAX if car.u >= 0 else B_MAX)
                 accels[i] = pedal - (ROLL + DRAG * car.v * car.v)
             else:
-                accels[i] = self._idm_accel(car, lead, gaps[i])
+                accels[i] = self._idm_accel(car, lead, gaps[i], delay)
                 if self.p.NOISE > 0.0:        # nobody holds a speed perfectly
                     accels[i] += self._rng.gauss(0.0, self.p.NOISE)
 
@@ -341,20 +386,22 @@ class Ring:
             v = max(0.0, car.v + accels[i] * dt)
             new_v[i] = v
             new_s[i] = car.s + v * dt                            # semi-implicit Euler
-            car.bumped = False
 
         # Hard no-pass constraint. The IDM already brakes bots in time, so this is a
         # safety net against a human flooring it -- without it a player could tunnel
         # through the car ahead and destroy the ordering invariant the whole model
         # rests on. Two passes so a car shoved backwards can shove the one behind it.
         touched = [False] * n
-        for _ in range(2):
+        impact = [0.0] * n            # closing speed at the moment of contact
+        for p in range(2):
             for i in range(n - 1, -1, -1):
                 j = (i + 1) % n
                 if j == i:
                     continue
                 gap = (new_s[j] - new_s[i]) % L - CAR_LEN
                 if gap < MIN_GAP:
+                    if p == 0:        # first pass sees the true approach speed
+                        impact[i] = max(impact[i], new_v[i] - new_v[j])
                     new_s[i] = new_s[j] - CAR_LEN - MIN_GAP
                     new_v[i] = min(new_v[i], new_v[j])           # inelastic contact
                     touched[i] = True
@@ -365,7 +412,9 @@ class Ring:
         # The crash is the moment contact BEGINS, so it is a rising edge on contact,
         # with a short cooldown to swallow chatter if the clamp flickers.
         for i, car in enumerate(cars):
-            if touched[i] and not car.in_contact and self.t - car.last_bump_t > 0.8:
+            if (touched[i] and not car.in_contact
+                    and self.t - car.last_bump_t > 0.8
+                    and impact[i] >= CRASH_SPEED):
                 car.crashes += 1
                 car.last_bump_t = self.t
             car.in_contact = touched[i]
@@ -379,6 +428,7 @@ class Ring:
             car.dist += moved
             car.s = _wrap(new_s[i], L)
             car.v = new_v[i]
+            car.hist.append((car.s, car.v))
 
         self.t += dt
 

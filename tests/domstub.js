@@ -68,6 +68,7 @@ var document = {
         return ELS[id];
     },
     createElement(tag) { return makeEl('_created', tag); },
+    get body() { return (ELS.__body ||= makeEl('__body', 'body')); },
     addEventListener() {},
 };
 var MISSING = new Set();

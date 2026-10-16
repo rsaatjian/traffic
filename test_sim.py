@@ -192,6 +192,73 @@ class TestStability(unittest.TestCase):
                            "without noise the instability itself vanished")
 
 
+class TestCrashes(unittest.TestCase):
+    """Brake-checking, and the rule that counting it changes nothing."""
+
+    def test_counting_a_crash_does_not_touch_the_dynamics(self):
+        """THE constraint: the crash board is an observer, never a cause.
+
+        An immobilised or penalised car is a real bottleneck with an obvious cause,
+        and the entire point of the demo is a jam that has none. So the same run with
+        the crash threshold at zero (count everything) and at infinity (count
+        nothing) must be bit-for-bit identical in position and speed.
+        """
+        # addCleanup, not a trailing assignment: this is a module-level global, and
+        # if an assertion below fails before the restore runs it leaks into every
+        # later test in the file.
+        original = sim.CRASH_SPEED
+        self.addCleanup(setattr, sim, "CRASH_SPEED", original)
+
+        def run(threshold):
+            """A ring of humans mashing the pedals, which reliably makes contact."""
+            sim.CRASH_SPEED = threshold
+            ring = sim.Ring(sim.Params(L=400.0, N=30), seed=5)
+            for car in ring.cars:
+                car.kind = "human"
+            rng = random.Random(11)
+            for step in range(int(60 / DT)):
+                if step % 15 == 0:
+                    for car in ring.cars:
+                        car.u = rng.uniform(-1.0, 1.0)
+                ring.step(DT)
+            trace = [(round(c.s, 9), round(c.v, 9)) for c in ring.cars]
+            return trace, sum(c.crashes for c in ring.cars)
+
+        all_trace, all_count = run(0.0)
+        none_trace, none_count = run(1e9)
+        self.assertGreater(all_count, 0, "the scenario should produce contacts at all")
+        self.assertEqual(none_count, 0, "an unreachable threshold should count nothing")
+        self.assertEqual(all_trace, none_trace,
+                         "counting crashes perturbed the simulation")
+
+    def test_brake_checking_a_player_counts_a_crash(self):
+        """A driver slamming the brakes on the car behind should register."""
+        ring = sim.Ring(sim.Params(L=3000.0, N=2, SEED=0.0, NOISE=0.0, SPREAD=0.0))
+        lead, follow = ring.cars[0], ring.cars[1]
+        lead.s, follow.s = 1000.0, 1000.0 - sim.CAR_LEN - 12.0
+        lead.v = follow.v = 20.0
+        lead.kind, lead.u = "human", 0.0
+        follow.kind, follow.u = "human", 0.0      # a person, who does not auto-brake
+        settle(ring, 1.0)
+        self.assertEqual(follow.crashes, 0)
+        lead.u = -1.0                             # BRAKE CHECK
+        settle(ring, 5.0)
+        self.assertEqual(follow.crashes, 1, "the car behind should have rear-ended them")
+        self.assertGreaterEqual(min(ring.gaps()), -1e-6, "and still not interpenetrated")
+
+    def test_crawling_contact_in_a_queue_is_not_a_crash(self):
+        """Nose-to-tail shuffling in a jam must not inflate the board."""
+        ring = sim.Ring(sim.Params(L=3000.0, N=2, SEED=0.0, NOISE=0.0, SPREAD=0.0))
+        lead, follow = ring.cars[0], ring.cars[1]
+        lead.s, follow.s = 1000.0, 1000.0 - sim.CAR_LEN - 1.0
+        lead.v = follow.v = 1.2                   # 2.7 mph, bumper to bumper
+        lead.kind, lead.u = "human", -1.0
+        follow.kind, follow.u = "human", 0.4
+        settle(ring, 30.0)
+        self.assertEqual(follow.crashes, 0,
+                         "slow contact in a queue should not count as a crash")
+
+
 class TestIntegrity(unittest.TestCase):
     def test_motion_is_forward_and_bounded(self):
         ring = sim.Ring(sim.Params())

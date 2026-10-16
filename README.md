@@ -158,6 +158,7 @@ controls — which is impossible to diagnose mid-lecture.
 | **Driver variation** | spread of desired speeds between drivers (the seed) |
 | **Speed-holding noise** | how imperfectly drivers hold a speed (the other seed) |
 | **Starting bunching** | how non-uniform the ring is at reset — the main control on how fast a jam appears |
+| **Bot reaction time** | 0 = classic instantaneous IDM (the default). Above 0 the autopilot answers late, which makes it possible to rear-end — but moves the stability boundary, so the demo numbers below stop holding |
 | **Tap the brakes** | one bot brakes hard for a second — triggers the wave on cue |
 | **Reset** | uniform ring, clocks restarted |
 
@@ -276,6 +277,26 @@ down: 30 s pinned against a parked car scores 1, and six separate run-ups score 
 
 Bots are left off the board — the IDM essentially never touches anybody (0 crashes
 over 180 s of jamming), so they would just be a column of zeroes.
+
+## Crashing into people
+
+Brake-check the driver behind you and they will rear-end you; it lands on the crash
+board and on their HUD. Contact counts only above ~10 mph of closing speed, so
+shuffling nose-to-tail in a stopped queue is free.
+
+**A crash has no other effect — deliberately.** Cars are not immobilised, not slowed
+beyond the inelastic contact that was always there, not penalised. A stopped wreck is a
+*real* bottleneck with an obvious cause, and the entire point of this demo is a jam
+that has none. `test_counting_a_crash_does_not_touch_the_dynamics` runs the same seed
+with the threshold at zero and at infinity and asserts the trajectories are identical
+to nine decimal places, so the crash board can never quietly become a cause.
+
+One consequence worth knowing: **bots cannot be rear-ended at the default settings.**
+Plain IDM reacts instantly with unlimited braking, so it always avoids you. Brake-
+checking works on other *people*, who do not auto-brake. The `Bot reaction time` slider
+makes the autopilot rear-endable too — measured, 0.5 s lets you wreck one from 59 ft at
+45 mph — but it is off by default because it moves the stability boundary: at 0.5 s a
+kick at 48 veh/mi stops decaying, and at 0.9 s free flow disappears altogether.
 
 ## Feel
 
