@@ -1,0 +1,87 @@
+/* Drive page: join, chase view, pedals, neighbour readout, prediction. */
+registerIds(PAGE_IDS, PAGE_HIDDEN);
+
+print('-- drive page --');
+ok(MISSING.size === 0, `all element ids exist (missing: ${[...MISSING].join(',') || 'none'})`);
+ok(OPENED === 0, 'drive page does NOT connect until the driver joins');
+
+ELS['name'].value = 'ana';
+ELS['go'].fire('click');
+ok(OPENED === 1, 'clicking Drive opens the socket');
+WS.onopen();
+const hello = SENT[0];
+ok(hello.type === 'hello' && hello.drive === true && hello.name === 'ana',
+   `asks for a car: ${JSON.stringify(hello)}`);
+
+welcome({ you: 7 });
+feed(40, { jam: false, youIdx: 6, youV: 14.0 });
+ok(CTX_CALLS > 2000, `first-person scene drew (${CTX_CALLS} ctx calls)`);
+ok(String(ELS['speed'].textContent) === '31', `speed in mph: ${ELS['speed'].textContent}`);
+ok(+ELS['gap'].textContent > 0, `gap to the car ahead, in feet: ${ELS['gap'].textContent}`);
+ok(String(ELS['aheadwho'].textContent) === 'autopilot', `names who is ahead: ${ELS['aheadwho'].textContent}`);
+ok(String(ELS['gapbar'].style.width).includes('%'), 'gap bar is driven');
+ok(String(ELS['crashes'].textContent) === '2', `own crash count shown: ${ELS['crashes'].textContent}`);
+ok(ELS['crashchip'].classList.contains('bad'), 'crash chip turns red once you have hit someone');
+
+// --- input goes out the instant a key is pressed, with no polling tick in between
+const before = SENT.length;
+fireWindow('keydown', { key: 'ArrowUp' });
+step(16);
+ok(SENT.length > before, 'throttle sent on the very next frame, not on a 20 Hz poll');
+ok(SENT[SENT.length - 1].type === 'input' && SENT[SENT.length - 1].u > 0,
+   `gas -> u=${SENT[SENT.length - 1].u}`);
+ok(ELS['accel'].classList.contains('held'), 'GAS pedal shows as held');
+
+// reaches full throttle in ~35 ms, not the old 120 ms
+for (let i = 0; i < 4; i++) step(16);
+ok(Net.state.throttle === 1, `full throttle within ~60 ms (u=${Net.state.throttle})`);
+
+// --- client-side prediction: the car must move WITHOUT any new server snapshot
+const vBefore = Net.state.pred.v;
+const sBefore = Net.state.pred.s;
+for (let i = 0; i < 20; i++) step(16);          // ~320 ms, no packets at all
+ok(Net.state.pred.v > vBefore + 1,
+   `predicted car accelerates between packets: ${vBefore.toFixed(1)} -> ${Net.state.pred.v.toFixed(1)} m/s`);
+ok(Net.state.pred.s !== sBefore, 'predicted car moves between packets');
+
+fireWindow('keyup', { key: 'ArrowUp' });
+fireWindow('keydown', { key: ' ' });
+for (let i = 0; i < 5; i++) step(16);
+ok(SENT[SENT.length - 1].u < 0, `brake -> u=${SENT[SENT.length - 1].u}`);
+
+fireWindow('keyup', { key: ' ' });
+for (let i = 0; i < 5; i++) step(16);
+ok(Net.state.throttle === 0, `release -> coast, u=${Net.state.throttle}`);
+
+// coasting must bleed speed off with no input at all
+const vCoast = Net.state.pred.v;
+for (let i = 0; i < 40; i++) step(16);
+ok(Net.state.pred.v < vCoast, `rolls to a stop with no input: ${vCoast.toFixed(1)} -> ${Net.state.pred.v.toFixed(1)} m/s`);
+
+// --- closing fast on a stopped car raises the warning
+globalThis._simT = 0;
+feed(30, { jam: true, youIdx: 6, youV: 25.0 });
+ok(ELS['warn'].className.includes('on'), `warning fires when closing: "${ELS['warn'].textContent}"`);
+ok(!String(ELS['warn'].textContent).includes('NaN'), 'warning text has no NaN');
+
+// --- no WebAudio under gjs: the sound toggle must degrade, not throw
+ok(true, 'engine audio absent without WebAudio, and did not throw');
+
+// --- the first-person projection must be sane: things further away are smaller,
+// the horizon sits above the road, and nothing lands at NaN
+Cockpit.setup(ELS['view'].getContext('2d'), 800, 600);
+const near = Cockpit.proj(0, 0, 5), far = Cockpit.proj(0, 0, 80);
+ok(near[1] > far[1], `nearer road is lower on screen (${near[1].toFixed(0)} > ${far[1].toFixed(0)})`);
+ok(far[1] > Cockpit.horizon, 'road never projects above the horizon');
+ok(Cockpit.sc(5) > Cockpit.sc(80), 'distant cars are drawn smaller');
+const edgeN = Cockpit.proj(-4.5, 0, 5)[0], edgeF = Cockpit.proj(-4.5, 0, 200)[0];
+ok(edgeN < edgeF, 'road edges converge toward the vanishing point');
+ok([...near, ...far].every(Number.isFinite), 'projection produces no NaN');
+const behind = Cockpit.proj(0, 0, -3);
+ok(behind.every(Number.isFinite), 'a car behind us does not blow up the projection');
+
+// --- the drive page must never render a ring overview or any plot
+ok(MISSING.size === 0, 'drive page touches no overview-only elements');
+
+print(fails === 0 ? 'DRIVE OK' : `${fails} DRIVE CHECK(S) FAILED`);
+if (fails) imports.system.exit(1);

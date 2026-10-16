@@ -1,0 +1,6 @@
+.cloudflared
+.host_token
+logs/
+*.pyc
+__pycache__/
+resume.txt
