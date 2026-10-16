@@ -1,0 +1,28 @@
+# Render Blueprint. Create the service by pointing Render at this repo
+# (New > Blueprint), or configure a Web Service by hand with the same values.
+services:
+  - type: web
+    name: ring-road
+    runtime: python
+    plan: free
+    branch: main
+    buildCommand: pip install -r requirements.txt
+    # server.py binds $PORT, which Render sets.
+    #
+    # IMPORTANT: this must stay a SINGLE instance. The ring is one module-level
+    # object stepped at 60 Hz, so a second instance is a second, unrelated
+    # simulation and drivers would be split silently between them. The free plan
+    # is always one instance; do not add scaling if you upgrade.
+    startCommand: python server.py
+    healthCheckPath: /healthz
+    # Python version comes from .python-version (3.13, which is what the tests are
+    # run against). Render's default is now 3.14.x, which this has not been tried on.
+    envVars:
+      # A stable instructor link. Render's disk is ephemeral, so without this the
+      # token file is recreated on every deploy and the ?host= link dies.
+      - key: HOST_TOKEN
+        generateValue: true
+      # Blank by default. Set a value in the dashboard to require a PIN to drive;
+      # worth doing, since a public URL means anyone with the link can join.
+      - key: DRIVER_PIN
+        sync: false

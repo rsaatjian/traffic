@@ -52,7 +52,25 @@ It needs very little CPU (~0.4% of a core, measured, mostly JSON) but a fair amo
 egress: a 1.7 KB frame at 30 Hz per client is **~12 Mbit/s and 5.5 GB per hour with 30
 students**. That, not compute, is what a free tier will object to.
 
-`requirements.txt` and `$PORT` support are in, so most platforms need no extra work:
+### Deploying to Render
+
+`render.yaml` is a Blueprint, so Render can configure itself:
+
+1. Push to GitHub (done), then in Render: **New > Blueprint**, pick this repo, Apply.
+2. It reads `render.yaml`: free plan, `pip install -r requirements.txt`,
+   `python server.py`, health check on `/healthz`, Python from `.python-version`.
+3. `HOST_TOKEN` is generated once and kept, so your `?host=` link stays valid across
+   deploys. Find it under the service's **Environment** tab.
+4. Optionally set `DRIVER_PIN` there to require a PIN to drive.
+
+Or configure a Web Service by hand with the same build and start commands.
+
+**The free plan sleeps after 15 minutes idle** and takes roughly a minute to wake,
+during which the simulation restarts from scratch. Load the overview a couple of
+minutes before class and it will be warm. Egress is the other limit: at ~5.5 GB per
+hour with 30 drivers, the 100 GB/month allowance is about 18 lecture-hours.
+
+For any other platform, the two requirements are the same:
 
 ```
 build:  pip install -r requirements.txt

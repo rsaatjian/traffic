@@ -67,17 +67,23 @@ def load_host_token(rotate: bool = False) -> str:
     Regenerating it on every start silently breaks the instructor's bookmark, which is
     exactly the wrong failure for something used in front of a class: the page loads,
     looks completely normal, and simply has no controls on it.
+
+    $HOST_TOKEN wins when set, because a hosted deployment has an ephemeral disk: the
+    file would be rewritten on every deploy and the link would change weekly.
     """
+    from_env = os.environ.get("HOST_TOKEN", "").strip()
+    if from_env and not rotate:
+        return from_env
     if not rotate and TOKEN_FILE.exists():
         existing = TOKEN_FILE.read_text().strip()
         if existing:
             return existing
     token = secrets.token_urlsafe(8)
-    TOKEN_FILE.write_text(token + "\n")
     try:
+        TOKEN_FILE.write_text(token + "\n")
         TOKEN_FILE.chmod(0o600)
-    except OSError:
-        pass
+    except OSError:                  # read-only or ephemeral disk: run without it
+        log.warning("could not persist the host token; set $HOST_TOKEN to pin it")
     return token
 
 
@@ -201,6 +207,14 @@ class SimHandler(tornado.websocket.WebSocketHandler):
             CLIENTS.discard(self)
 
 
+class HealthHandler(tornado.web.RequestHandler):
+    """Liveness probe. Reports the sim clock so a flat-lined loop is visible."""
+
+    def get(self) -> None:
+        self.write({"ok": True, "t": round(RING.t, 1),
+                    "cars": len(RING.cars), "clients": len(CLIENTS)})
+
+
 class QRHandler(tornado.web.RequestHandler):
     """The drivers' URL as a scannable SVG, for the projector.
 
@@ -318,8 +332,8 @@ def main() -> None:
     ap.add_argument("--length", type=float, default=RING.p.L, help="ring circumference, metres")
     ap.add_argument("--new-token", action="store_true",
                     help="rotate the instructor token (invalidates existing links)")
-    ap.add_argument("--pin", default="",
-                    help="require this PIN to drive (recommended when sharing publicly)")
+    ap.add_argument("--pin", default=os.environ.get("DRIVER_PIN", ""),
+                    help="require this PIN to drive; defaults to $DRIVER_PIN")
     args = ap.parse_args()
 
     global HOST_TOKEN, DRIVER_PIN
@@ -339,6 +353,7 @@ def main() -> None:
     app = tornado.web.Application([
         (r"/ws", SimHandler),
         (r"/qr.svg", QRHandler),
+        (r"/healthz", HealthHandler),
         (r"/", PageHandler, dict(filename="index.html", **static)),
         (r"/drive/?", PageHandler, dict(filename="drive.html", **static)),
         (r"/(.*)", NoCacheStatic, static),
