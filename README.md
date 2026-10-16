@@ -41,6 +41,28 @@ overview:    http://192.168.4.23:8700/
 instructor:  http://192.168.4.23:8700/?host=XXXXXXXX
 ```
 
+## Hosting it somewhere
+
+The app is a **single stateful process**: the ring lives in one module-level object
+stepped at 60 Hz. That rules out anything serverless or autoscaling — two instances
+means two unrelated simulations and students silently split between them. Pin any
+deployment to exactly one instance.
+
+It needs very little CPU (~0.4% of a core, measured, mostly JSON) but a fair amount of
+egress: a 1.7 KB frame at 30 Hz per client is **~12 Mbit/s and 5.5 GB per hour with 30
+students**. That, not compute, is what a free tier will object to.
+
+`requirements.txt` and `$PORT` support are in, so most platforms need no extra work:
+
+```
+build:  pip install -r requirements.txt
+start:  python server.py          # binds $PORT automatically
+```
+
+**For a live class, a tunnel from your own laptop is usually better than a free host**
+— no cold start, no instance limits, lower latency since you are in the room, and you
+control it. A host only wins if students need a stable URL outside class.
+
 ## Drivers off your network
 
 The ring works for anyone on the internet without changing a line of configuration:

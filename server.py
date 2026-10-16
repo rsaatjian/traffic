@@ -13,9 +13,10 @@ import argparse
 import io
 import json
 import logging
-import secrets
+import os
 import pathlib
 import re
+import secrets
 import socket
 
 try:
@@ -308,8 +309,10 @@ def lan_ip() -> str:
 
 def main() -> None:
     ap = argparse.ArgumentParser(description="Multiplayer ring-road traffic demo")
-    ap.add_argument("--port", type=int, default=8700,
-                    help="8888 is avoided on purpose: it is Jupyter's default")
+    # Hosts hand you a port in $PORT and expect you to bind it; locally the default
+    # is 8700 (not 8888, which is Jupyter's).
+    ap.add_argument("--port", type=int, default=int(os.environ.get("PORT", 8700)),
+                    help="defaults to $PORT if set, else 8700")
     ap.add_argument("--bind", default="0.0.0.0", help="0.0.0.0 lets the class join")
     ap.add_argument("--cars", type=int, default=RING.p.N, help="total cars on the ring")
     ap.add_argument("--length", type=float, default=RING.p.L, help="ring circumference, metres")

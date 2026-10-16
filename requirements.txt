@@ -1,0 +1,4 @@
+# tornado is the whole server: HTTP, WebSockets and the simulation loop.
+tornado>=6.4
+# optional, powers the join QR code; the app runs without it (see README).
+segno>=1.6
