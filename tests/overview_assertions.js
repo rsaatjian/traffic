@@ -107,6 +107,14 @@ ok(ELS['qr'].hidden === true, 'QR stays hidden until it actually loads (segno ma
 ELS['qr'].onload();
 ok(ELS['qr'].hidden === false, 'QR shows once loaded');
 
+// --- a plain spectator must be told WHY there are no controls. A page that just
+// has nothing on it is the hardest possible thing to debug mid-lecture.
+ELS['notice'].hidden = true;
+welcome({ is_host: false });
+ok(ELS['notice'].hidden === false, 'spectating says why the panel is absent');
+ok(String(ELS['notice'].innerHTML).includes('?host='), 'tells you how to get controls');
+ok(ELS['notice'].className === 'muted', 'and does so quietly, not as an error');
+
 // a stale instructor link must SAY so rather than silently hiding the controls
 ELS['notice'].hidden = true;
 welcome({ is_host: false, host_rejected: true });

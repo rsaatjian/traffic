@@ -57,5 +57,7 @@ main{display:flex;height:100vh}
 
 #notice{position:absolute;top:70px;left:50%;transform:translateX(-50%);
   padding:10px 16px;border-radius:8px;font-size:13px;max-width:min(90%,560px);
-  background:#2b1416;border:1px solid var(--slow);color:#ffd7d7;text-align:center}
+  text-align:center}
+#notice.bad{background:#2b1416;border:1px solid var(--slow);color:#ffd7d7}
+#notice.muted{background:rgba(14,19,25,.9);border:1px solid var(--line);color:var(--dim)}
 #notice code{background:rgba(0,0,0,.35);padding:1px 5px;border-radius:4px}

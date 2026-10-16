@@ -36,11 +36,24 @@ Net.on('welcome', m => {
     qr.src = '/qr.svg';
   }
   if (m.is_host) initHostPanel();
+  // A page that simply has no controls on it is impossible to diagnose while
+  // standing in front of a class -- it looks completely normal. Say which case it is.
+  const el = $('notice');
   if (m.host_rejected) {
-    const el = $('notice');
     el.hidden = false;
+    el.className = 'bad';
     el.innerHTML = 'That instructor link is out of date, so the controls are hidden. ' +
-      'Get the current one with <code>grep instructor logs/server.log</code>.';
+      'Find the current <code>HOST_TOKEN</code> in your host\'s environment settings, ' +
+      'or run <code>grep instructor logs/server.log</code> locally.';
+  } else if (!m.is_host) {
+    el.hidden = false;
+    el.className = 'muted';
+    el.innerHTML = 'Spectating. For the instructor controls, open this page as ' +
+      '<code>?host=TOKEN</code> &mdash; the token is printed in the server log at ' +
+      'startup (and is <code>HOST_TOKEN</code> in your host\'s environment).';
+    setTimeout(() => { el.hidden = true; }, 20000);   // not permanent on a projector
+  } else {
+    el.hidden = true;
   }
 });
 Net.on('params', () => syncHostInputs());

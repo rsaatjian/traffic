@@ -59,8 +59,18 @@ students**. That, not compute, is what a free tier will object to.
 1. Push to GitHub (done), then in Render: **New > Blueprint**, pick this repo, Apply.
 2. It reads `render.yaml`: free plan, `pip install -r requirements.txt`,
    `python server.py`, health check on `/healthz`, Python from `.python-version`.
-3. `HOST_TOKEN` is generated once and kept, so your `?host=` link stays valid across
-   deploys. Find it under the service's **Environment** tab.
+3. **Get your instructor link from the deploy logs.** The startup banner prints it
+   in full, using the real `onrender.com` address:
+
+   ```
+   instructor:  https://ring-road.onrender.com/?host=XXXXXXXX
+   ```
+
+   The token is also under the service's **Environment** tab as `HOST_TOKEN`. It is
+   generated once and kept, so the link survives redeploys. Your *local* token is a
+   different one and will not work here — opening the hosted overview without the
+   right `?host=` gives you a spectator view with no controls, and the page now says
+   so rather than just looking empty.
 4. Optionally set `DRIVER_PIN` there to require a PIN to drive.
 
 Or configure a Web Service by hand with the same build and start commands.

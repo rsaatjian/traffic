@@ -40,6 +40,7 @@ RING = sim.Ring()
 CLIENTS: set["SimHandler"] = set()
 HOST_TOKEN = ""                  # set in main(); see load_host_token()
 LAN_ADDR = ""                    # host:port on the local network, found at startup
+PUBLIC_URL = ""                  # the address people outside this machine should use
 DRIVER_PIN = ""                  # optional: drivers must supply this to get a car
 
 
@@ -56,7 +57,7 @@ def public_base(request) -> str:
     host = request.headers.get("X-Forwarded-Host") or request.headers.get("Host", "")
     proto = request.headers.get("X-Forwarded-Proto") or request.protocol
     if host.split(":")[0].lower() in ("localhost", "127.0.0.1", "::1", ""):
-        return f"http://{LAN_ADDR}"
+        return PUBLIC_URL
     return f"{proto}://{host}"
 TOKEN_FILE = pathlib.Path(__file__).with_name(".host_token")
 
@@ -366,14 +367,21 @@ def main() -> None:
         log.error("something else is using it -- try:  ./run.sh --port %d", args.port + 1)
         raise SystemExit(1)
 
-    global LAN_ADDR
+    global LAN_ADDR, PUBLIC_URL
     ip = lan_ip()
     LAN_ADDR = f"{ip}:{args.port}"
+    # A host knows its own public address; ours does not. Render exports it, and
+    # $PUBLIC_URL covers anything else. Without this the startup banner prints a
+    # container-internal IP, and the instructor link it prints is unusable -- which
+    # matters because that log line is the only place the generated token is shown.
+    PUBLIC_URL = (os.environ.get("RENDER_EXTERNAL_URL")
+                  or os.environ.get("PUBLIC_URL")
+                  or f"http://{LAN_ADDR}").rstrip("/")
     log.info("ring: %d cars on %.0f ft  (%.0f veh/mi)",
              RING.p.N, RING.p.L * 3.280839895, RING.p.N / RING.p.L * 1609.344)
-    log.info("drivers:     http://%s/drive", LAN_ADDR)
-    log.info("overview:    http://%s/", LAN_ADDR)
-    log.info("instructor:  http://%s/?host=%s", LAN_ADDR, HOST_TOKEN)
+    log.info("drivers:     %s/drive", PUBLIC_URL)
+    log.info("overview:    %s/", PUBLIC_URL)
+    log.info("instructor:  %s/?host=%s", PUBLIC_URL, HOST_TOKEN)
     if DRIVER_PIN:
         log.info("driver PIN:  %s", DRIVER_PIN)
     log.info("off-network:  ./share.sh   (public URL via a Cloudflare tunnel)")
