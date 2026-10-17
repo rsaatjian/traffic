@@ -71,7 +71,7 @@ ok(true, 'engine audio absent without WebAudio, and did not throw');
 TEXTS.length = 0;
 feed(3, { jam: false, youIdx: 6, youV: 14.0, aheadName: 'mia' });
 ok(TEXTS.some(t => t === 'MIA'), `plate letters the driver's name: ${JSON.stringify(TEXTS.filter(t => /^[A-Z]+$/.test(t)))}`);
-ok(!TEXTS.includes('AUTOPILOT'), 'bots are not given plates');
+ok(!TEXTS.includes('AUTOPILOT'), 'the word autopilot is never lettered on a car');
 
 // a long name must be shrunk to fit, not spill off the plate
 TEXTS.length = 0;
@@ -85,6 +85,19 @@ Cockpit.setup(ctxP, 900, 640);
 let threw = null;
 try { Cockpit.plate(ctxP, 450, 400, 60, 'mia'); } catch (e) { threw = e.message; }
 ok(threw === null, `plate draws without throwing (${threw || 'ok'})`);
+
+// Only a named human gets a plate. Asserted directly on carRear rather than by the
+// absence of some string: a blanket override that plated every car passed the old
+// check, because "no AUTOPILOT text" is true whatever you letter on a bot.
+TEXTS.length = 0;
+Cockpit.carRear(ctxP, 10, { color: '#4aa3ff', human: false, name: '' });
+ok(TEXTS.length === 0, `an autopilot car letters nothing (drew ${JSON.stringify(TEXTS)})`);
+TEXTS.length = 0;
+Cockpit.carRear(ctxP, 10, { color: '#4aa3ff', human: true, name: '' });
+ok(TEXTS.length === 0, 'a human with no name yet letters nothing');
+TEXTS.length = 0;
+Cockpit.carRear(ctxP, 10, { color: '#4aa3ff', human: true, name: 'jo' });
+ok(TEXTS.includes('JO'), `a named human does get a plate (drew ${JSON.stringify(TEXTS)})`);
 
 // --- the screen must go red for EITHER side of a contact
 ELS['flash'].classList.remove('on'); ELS['flash'].classList.remove('hard');
