@@ -196,20 +196,11 @@ function carRear(ctx, z, opts) {
   ctx.restore();
   ctx.restore();
 
-  // A person in front gets their name on the plate. Bots get nothing, so "there is
-  // a human ahead of me" is readable at a glance without reading anything.
-  if (human && name) {
-    // The plate is the nice version, but it only letters legibly up close: at 80 ft
-    // it is 19 px wide and the text shrinks to mush. So keep a floating tag until
-    // the plate is big enough to actually read, and show both in between.
-    if (w > 46) plate(ctx, lx + w / 2, by - h * 0.125, w * 0.34, name);
-    if (w > 16 && w <= 130) {
-      ctx.fillStyle = 'rgba(255,255,255,.9)';
-      ctx.font = '600 12px ui-sans-serif,system-ui';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'alphabetic';
-      ctx.fillText(name, lx + w / 2, ty - 7);
-    }
+  // A person in front gets their name on the plate; bots get nothing, so "there is
+  // a human ahead of me" reads at a glance. Far off it is just a pale smudge, which
+  // is what a real plate looks like from a distance.
+  if (human && name && w > 24) {
+    plate(ctx, lx + w / 2, by - h * 0.125, w * 0.34, name);
   }
 }
 
