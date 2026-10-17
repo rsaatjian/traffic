@@ -64,6 +64,7 @@ function onSnapshot(m) {
   const cars = m.cars.map(a => ({
     id: a[0], s: a[1], v: a[2], human: a[3], name: a[4],
     color: a[5], bumped: !!a[6], lap: a[7], braking: !!a[8], crashes: a[9] || 0,
+    rearEnded: !!a[10],
   }));
   state.buf.push({ t: m.t, at: performance.now(), cars, stats: m.stats });
   while (state.buf.length > 4) state.buf.shift();
@@ -71,7 +72,8 @@ function onSnapshot(m) {
 
   const me = cars.find(c => c.id === state.you);
   if (me) {
-    if (me.bumped) emit('bump', me);
+    // either side of a contact: you hit someone, or someone hit you
+    if (me.bumped || me.rearEnded) emit('bump', me);
     reconcile(me);
   }
   emit('state', state.buf[state.buf.length - 1]);

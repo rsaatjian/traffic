@@ -67,6 +67,19 @@ ok(!String(ELS['warn'].textContent).includes('NaN'), 'warning text has no NaN');
 // --- no WebAudio under gjs: the sound toggle must degrade, not throw
 ok(true, 'engine audio absent without WebAudio, and did not throw');
 
+// --- the screen must go red for EITHER side of a contact
+ELS['flash'].classList.remove('on'); ELS['flash'].classList.remove('hard');
+feed(2, { jam: false, youIdx: 6, youV: 14.0, bumpYou: true });
+ok(ELS['flash'].classList.contains('on'), 'screen flashes red when you hit someone');
+ok(!ELS['flash'].classList.contains('hard'), 'your own fault is the lighter flash');
+ok(String(ELS['warn'].textContent) === 'IMPACT', `banner: ${ELS['warn'].textContent}`);
+
+ELS['flash'].classList.remove('on');
+feed(2, { jam: false, youIdx: 6, youV: 14.0, hitYou: true });
+ok(ELS['flash'].classList.contains('on'), 'screen flashes red when someone rear-ends YOU');
+ok(ELS['flash'].classList.contains('hard'), 'being hit gets the harder flash');
+ok(String(ELS['warn'].textContent) === 'REAR-ENDED', `banner: ${ELS['warn'].textContent}`);
+
 // --- the first-person projection must be sane: things further away are smaller,
 // the horizon sits above the road, and nothing lands at NaN
 Cockpit.setup(ELS['view'].getContext('2d'), 800, 600);

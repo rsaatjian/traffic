@@ -44,11 +44,23 @@ function pedal(el, value) {
 pedal($('accel'), 1);
 pedal($('brake'), -1);
 
-Net.on('bump', () => {
-  FX.bump(1.2);
-  $('flash').classList.add('on');
-  setTimeout(() => $('flash').classList.remove('on'), 170);
+Net.on('bump', me => {
+  // Being rear-ended throws you forward harder than nudging the car ahead, and it is
+  // not your fault, so it gets the bigger jolt and its own label.
+  const hit = me.rearEnded;
+  FX.bump(hit ? 1.4 : 1.1);
+  const flash = $('flash');
+  flash.classList.add('on');
+  flash.classList.toggle('hard', hit);
+  setTimeout(() => flash.classList.remove('on'), hit ? 260 : 180);
+  const warn = $('warn');
+  warn.textContent = hit ? 'REAR-ENDED' : 'IMPACT';
+  warn.className = 'on danger';
+  clearTimeout(warnTimer);
+  bannerUntil = performance.now() + 900;
+  warnTimer = setTimeout(() => { warn.className = ''; warnTimer = 0; }, 900);
 });
+let warnTimer = 0, bannerUntil = 0;
 Net.on('close', () => { $('join').classList.remove('gone'); $('go').textContent = 'Reconnect'; });
 
 Net.on('welcome', m => {
@@ -150,7 +162,10 @@ function updateHud(n, me) {
 
   const ttc = gap / Math.max(closing, 1e-6);
   const warn = $('warn');
-  if (closing > 0.4 && ttc < 2.5) { warn.textContent = 'BRAKE'; warn.className = 'on danger'; }
+  // An impact banner owns the line until it expires. Keyed on a deadline, not on a
+  // timer handle -- a handle's truthiness is not a documented guarantee.
+  if (performance.now() < bannerUntil) { /* impact banner is showing */ }
+  else if (closing > 0.4 && ttc < 2.5) { warn.textContent = 'BRAKE'; warn.className = 'on danger'; }
   else if (me.v < 0.4) { warn.textContent = 'STOPPED'; warn.className = 'on'; }
   else { warn.className = ''; }
 

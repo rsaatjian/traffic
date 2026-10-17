@@ -246,6 +246,29 @@ class TestCrashes(unittest.TestCase):
         self.assertEqual(follow.crashes, 1, "the car behind should have rear-ended them")
         self.assertGreaterEqual(min(ring.gaps()), -1e-6, "and still not interpenetrated")
 
+    def test_both_cars_know_about_a_rear_end(self):
+        """The victim has to be told. The blame still goes to whoever ran into them."""
+        ring = sim.Ring(sim.Params(L=3000.0, N=2, SEED=0.0, NOISE=0.0, SPREAD=0.0))
+        lead, follow = ring.cars[0], ring.cars[1]
+        lead.s, follow.s = 1000.0, 1000.0 - sim.CAR_LEN - 12.0
+        lead.v = follow.v = 20.0
+        lead.kind, lead.u = "human", 0.0
+        follow.kind, follow.u = "human", 0.0
+        settle(ring, 1.0)
+        lead.u = -1.0                                   # brake-check
+        saw_hit, saw_victim = False, False
+        for _ in range(int(5.0 / DT)):
+            ring.step(DT)
+            if follow.bumped:
+                saw_hit = True
+                self.assertTrue(lead.rear_ended, "the car in front was not told it was hit")
+            if lead.rear_ended:
+                saw_victim = True
+        self.assertTrue(saw_hit, "no contact happened at all")
+        self.assertTrue(saw_victim, "the brake-checker never registered being hit")
+        self.assertEqual(follow.crashes, 1, "blame belongs to the car behind")
+        self.assertEqual(lead.crashes, 0, "the car in front should not be blamed")
+
     def test_crawling_contact_in_a_queue_is_not_a_crash(self):
         """Nose-to-tail shuffling in a jam must not inflate the board."""
         ring = sim.Ring(sim.Params(L=3000.0, N=2, SEED=0.0, NOISE=0.0, SPREAD=0.0))

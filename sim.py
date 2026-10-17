@@ -132,6 +132,7 @@ class Car:
     color: str = "#4aa3ff"
     dist: float = 0.0           # cumulative distance travelled, m (for laps)
     bumped: bool = False        # rear-ended someone on the last step
+    rear_ended: bool = False    # was hit from behind on the last step
     brake_until: float = -1.0   # sim time until which a forced brake applies
     v0_f: float = 1.0           # this driver's desired speed, as a factor of V0
     t_f: float = 1.0            # this driver's following distance, as a factor of T
@@ -411,12 +412,19 @@ class Ring:
         # every clamped step past a cooldown -- turns a single nose-to-tail into dozens.
         # The crash is the moment contact BEGINS, so it is a rising edge on contact,
         # with a short cooldown to swallow chatter if the clamp flickers.
+        # The crash goes on the car that ran into the back of someone -- that is
+        # whose fault it is. But both cars need to KNOW, or being rear-ended is
+        # invisible to the driver it happened to.
+        for car in cars:
+            car.rear_ended = False
         for i, car in enumerate(cars):
             if (touched[i] and not car.in_contact
                     and self.t - car.last_bump_t > 0.8
                     and impact[i] >= CRASH_SPEED):
                 car.crashes += 1
                 car.last_bump_t = self.t
+            if touched[i]:
+                cars[(i + 1) % n].rear_ended = True
             car.in_contact = touched[i]
             car.bumped = touched[i]
 
@@ -457,7 +465,8 @@ class Ring:
             "cars": [
                 [c.id, round(c.s, 2), round(c.v, 2), c.kind == "human", c.name,
                  c.color, 1 if c.bumped else 0, int(c.dist / self.p.L),
-                 1 if c.accel < -0.6 else 0, c.crashes]
+                 1 if c.accel < -0.6 else 0, c.crashes,
+                 1 if c.rear_ended else 0]
                 for c in self.cars
             ],
             "stats": {k: round(v, 5) for k, v in self.stats().items()},

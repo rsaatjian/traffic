@@ -3,8 +3,10 @@
 #view{position:absolute;inset:0;width:100%;height:100%}
 
 #flash{position:absolute;inset:0;pointer-events:none;opacity:0;
-  box-shadow:inset 0 0 120px 20px var(--slow);transition:opacity .2s}
+  box-shadow:inset 0 0 120px 20px var(--slow);transition:opacity .22s}
 #flash.on{opacity:.9;transition:none}
+/* rear-ended: harder, redder, and filled rather than just a vignette */
+#flash.hard{box-shadow:inset 0 0 200px 40px var(--slow);background:rgba(255,40,40,.22)}
 
 .hud-top{position:absolute;top:0;left:0;right:0;padding:14px 16px;
   display:flex;align-items:flex-start;justify-content:space-between;

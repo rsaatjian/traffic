@@ -85,7 +85,9 @@ var devicePixelRatio = 1;
 var performance = { now: () => CLOCK };
 function requestAnimationFrame(fn) { RAF.push(fn); return RAF.length; }
 function setInterval(fn, ms) { TIMERS.push({ fn, ms }); return TIMERS.length; }
-function setTimeout(fn) { return 0; }
+var TIMEOUTS = [];
+function setTimeout(fn, ms) { TIMEOUTS.push({ fn, ms }); return TIMEOUTS.length; }
+function clearTimeout(id) { if (id) TIMEOUTS[id - 1] = null; }
 var AudioContext = undefined;   // no WebAudio under gjs: FX.setAudio must cope
 function addEventListener(type, fn) { (globalThis._wl ||= {}); (globalThis._wl[type] ||= []).push(fn); }
 function fireWindow(type, ev) { for (const fn of (globalThis._wl?.[type] || [])) fn(Object.assign({ preventDefault(){} }, ev)); }

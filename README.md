@@ -284,6 +284,11 @@ Brake-check the driver behind you and they will rear-end you; it lands on the cr
 board and on their HUD. Contact counts only above ~10 mph of closing speed, so
 shuffling nose-to-tail in a stopped queue is free.
 
+**Both sides see it.** The screen flashes red whether you hit someone or someone hits
+you — being rear-ended gets the harder flash and a `REAR-ENDED` banner, hitting
+someone gets `IMPACT`. The crash itself is still charged to whoever ran into the back
+of whom, so brake-checking does not pad your own score.
+
 **A crash has no other effect — deliberately.** Cars are not immobilised, not slowed
 beyond the inelastic contact that was always there, not penalised. A stopped wreck is a
 *real* bottleneck with an obvious cause, and the entire point of this demo is a jam
