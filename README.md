@@ -278,6 +278,17 @@ down: 30 s pinned against a parked car scores 1, and six separate run-ups score 
 Bots are left off the board — the IDM essentially never touches anybody (0 crashes
 over 180 s of jamming), so they would just be a column of zeroes.
 
+## Who is on the ring
+
+A joining driver **takes over the bot in the largest gap**, so the density the
+instructor set does not move. Only when every car already has a person in it does the
+ring grow an extra seat — and that seat disappears again when they leave.
+
+That matters more than it sounds: growth used to overwrite the target, so a session
+where 50 people joined a 30-car ring ended with 50 bots still circulating at 201
+veh/mi instead of 121, with no record that 30 was ever asked for. Overflow is now
+temporary and `p.N` is never overwritten.
+
 ## Crashing into people
 
 Brake-check the driver behind you and they will rear-end you; it lands on the crash

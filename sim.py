@@ -180,9 +180,13 @@ class Ring:
         would persist forever even deep in the unstable regime. The jitter is what the
         instability amplifies, and is worth pointing at in class.
         """
-        L, N = self.p.L, self.p.N
-        spacing = L / N
+        L = self.p.L
         keep = {c.id: c for c in self.cars if c.kind == "human"}
+        # If more people are driving than the target density allows, keep their seats:
+        # rebuilding to exactly p.N would silently strand the extras with a car id the
+        # ring no longer has.
+        N = max(self.p.N, len(keep))
+        spacing = L / N
         self.cars = []
         self.t = 0.0
         humans = list(keep.values())
@@ -252,13 +256,18 @@ class Ring:
         if bots:
             _, idx = max(bots, key=lambda t: t[0])
             car = self.cars[idx]
-        elif len(self.cars) < MAX_CARS:       # everyone is human: grow the ring
+        elif len(self.cars) < MAX_CARS:
+            # Everyone is already human, so add a seat rather than turning a driver
+            # away. p.N is deliberately NOT updated: it is the density the instructor
+            # asked for, and an extra seat is a temporary overflow that goes away
+            # again in drop(). Overwriting it here used to make the growth permanent --
+            # fifty people joining and leaving left fifty bots on a ring set to
+            # thirty, at 201 veh/mi instead of 121, with the original target gone.
             gs = self.gaps()
             idx = max(range(len(gs)), key=lambda i: gs[i])
             lead = self.cars[idx]
             car = self._new_car(lead.s - CAR_LEN - gs[idx] / 2.0, lead.v)
             self.cars.insert(idx, car)
-            self.p.N = len(self.cars)
         else:
             # Ring full. Without this the seat count grows without bound, and since
             # every car is simulated every tick and broadcast to every client, a
@@ -274,11 +283,21 @@ class Ring:
         return car
 
     def drop(self, car_id: int) -> None:
-        """A player left: their car keeps driving, now under IDM control."""
-        for car in self.cars:
-            if car.id == car_id:
+        """A player left.
+
+        Their car normally keeps driving under IDM control, which keeps the density
+        exactly where the instructor set it. But if the ring had been grown past that
+        target to seat them, the seat goes away with them -- otherwise departed
+        drivers silently ratchet the density up for the rest of the session.
+        """
+        for i, car in enumerate(self.cars):
+            if car.id != car_id:
+                continue
+            if len(self.cars) > self.p.N and len(self.cars) > 2:
+                del self.cars[i]     # removing one car keeps the others' ring order
+            else:
                 car.kind, car.name, car.u = "bot", "", 0.0
-                return
+            return
 
     def set_population(self, n: int) -> None:
         n = max(2, min(MAX_CARS, int(n)))

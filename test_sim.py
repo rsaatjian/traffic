@@ -363,6 +363,48 @@ class TestIntegrity(unittest.TestCase):
         settle(ring, 20)
         self.assertGreaterEqual(min(ring.gaps()), -1e-6)
 
+    def test_departed_drivers_do_not_leave_cars_behind(self):
+        """Overflow seats are temporary; the instructor's density is not negotiable.
+
+        Growth used to overwrite the target, so a session where more people joined
+        than the ring had seats ended with the extras still circulating as bots --
+        a density the instructor never chose and could not read back anywhere.
+        """
+        ring = sim.Ring(sim.Params(N=30))
+        seated = [c for c in (ring.add_human(f"p{i}") for i in range(50)) if c]
+        self.assertEqual(len(seated), 50, "nobody should be turned away under MAX_CARS")
+        self.assertEqual(len(ring.cars), 50, "the ring should have grown to seat them")
+        self.assertEqual(ring.p.N, 30, "the instructor's target must be preserved")
+
+        for car in seated:
+            ring.drop(car.id)
+        self.assertEqual(len(ring.cars), 30, "overflow seats should have gone with them")
+        self.assertEqual(ring.p.N, 30)
+        settle(ring, 10)
+        self.assertGreaterEqual(min(ring.gaps()), -1e-6, "still sane after the shrink")
+        self.assertEqual(cyclic_order(ring), cyclic_order(ring), "ring order intact")
+
+    def test_a_driver_who_leaves_a_normal_ring_leaves_a_bot(self):
+        """Below the target there is no overflow, so the car stays and becomes a bot.
+
+        This is what keeps the density constant mid-session -- the common case.
+        """
+        ring = sim.Ring(sim.Params(N=30))
+        car = ring.add_human("ana")
+        self.assertEqual(len(ring.cars), 30)
+        ring.drop(car.id)
+        self.assertEqual(len(ring.cars), 30, "the seat should not vanish")
+        self.assertEqual([c.kind for c in ring.cars].count("human"), 0)
+
+    def test_reset_does_not_strand_overflow_drivers(self):
+        """Rebuilding to exactly p.N would orphan anyone in an overflow seat."""
+        ring = sim.Ring(sim.Params(N=10))
+        ids = {c.id for c in (ring.add_human(f"p{i}") for i in range(16)) if c}
+        self.assertEqual(len(ids), 16)
+        ring.reset()
+        still_there = {c.id for c in ring.cars if c.kind == "human"}
+        self.assertEqual(ids, still_there, "a driver lost their car across a reset")
+
     def test_ring_refuses_to_grow_without_bound(self):
         """A crowd must not be able to inflate the seat count indefinitely.
 
