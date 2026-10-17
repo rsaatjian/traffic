@@ -3,14 +3,17 @@ const ok = (cond, msg) => { print((cond ? '  OK      ' : '  FAIL    ') + msg); i
 
 /** A ring of `n` cars; `jam` puts a slow cluster near s=100. */
 function frameAt(t, { n = 22, L = 400, jam = true, youIdx = 6, youV = null,
-                      bumpYou = false, hitYou = false } = {}) {
+                      bumpYou = false, hitYou = false, aheadName = null } = {}) {
     const cars = [];
     for (let i = 0; i < n; i++) {
         const s = (i * (L / n) + t * 8) % L;
         const slow = jam && Math.abs(((s - 100 + 600) % L) - 200) > 170;
         let v = slow ? 1.2 : 14.0;
         if (i === youIdx && youV !== null) v = youV;
-        cars.push([i + 1, s, v, i === youIdx, i === youIdx ? 'ana' : '', '#4aa3ff',
+        // the car ahead of you is index youIdx+1; name it to make it a person
+        const isAhead = aheadName && i === youIdx + 1;
+        cars.push([i + 1, s, v, i === youIdx || !!isAhead,
+                   i === youIdx ? 'ana' : (isAhead ? aheadName : ''), '#4aa3ff',
                    (bumpYou && i === youIdx) ? 1 : 0,
                    Math.floor(t / 50), 0, i === youIdx ? 2 : 0,
                    (hitYou && i === youIdx) ? 1 : 0]);

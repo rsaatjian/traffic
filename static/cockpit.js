@@ -196,12 +196,49 @@ function carRear(ctx, z, opts) {
   ctx.restore();
   ctx.restore();
 
-  if (human && name && w > 18) {
-    ctx.fillStyle = 'rgba(255,255,255,.9)';
-    ctx.font = '600 12px ui-sans-serif,system-ui';
-    ctx.textAlign = 'center';
-    ctx.fillText(name, lx + w / 2, ty - 7);
+  // A person in front gets their name on the plate. Bots get nothing, so "there is
+  // a human ahead of me" is readable at a glance without reading anything.
+  if (human && name) {
+    // The plate is the nice version, but it only letters legibly up close: at 80 ft
+    // it is 19 px wide and the text shrinks to mush. So keep a floating tag until
+    // the plate is big enough to actually read, and show both in between.
+    if (w > 46) plate(ctx, lx + w / 2, by - h * 0.125, w * 0.34, name);
+    if (w > 16 && w <= 130) {
+      ctx.fillStyle = 'rgba(255,255,255,.9)';
+      ctx.font = '600 12px ui-sans-serif,system-ui';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'alphabetic';
+      ctx.fillText(name, lx + w / 2, ty - 7);
+    }
   }
+}
+
+/** A rear licence plate centred on (cx0, cy0), `pw` wide, lettered with `text`. */
+function plate(ctx, cx0, cy0, pw, text) {
+  const ph = pw / 2.1;                        // roughly a real plate's proportions
+  const x = cx0 - pw / 2, y = cy0 - ph / 2;
+
+  ctx.save();
+  ctx.fillStyle = '#0e1013';
+  Cars.roundRect(ctx, x - ph * 0.08, y - ph * 0.08, pw + ph * 0.16, ph + ph * 0.16, ph * 0.16);
+  ctx.fill();
+  ctx.fillStyle = '#e9e5d7';
+  Cars.roundRect(ctx, x, y, pw, ph, ph * 0.13);
+  ctx.fill();
+
+  const label = text.toUpperCase().slice(0, 10);
+  // shrink to fit rather than clipping: names here can be up to 16 characters
+  let size = ph * 0.70;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  for (let i = 0; i < 8; i++) {
+    ctx.font = `700 ${size}px ui-monospace,Menlo,Consolas,monospace`;
+    if (ctx.measureText(label).width <= pw * 0.86) break;
+    size *= 0.88;
+  }
+  ctx.fillStyle = '#16202e';
+  ctx.fillText(label, cx0, cy0 + ph * 0.04);
+  ctx.restore();
 }
 
 /* ---- interior ------------------------------------------------------------------ */
@@ -288,6 +325,6 @@ function mirror(ctx, behind, gapBehind) {
   ctx.fillText(label, W / 2, my + mh + 15);
 }
 
-return { setup, proj, sc, sky, ground, road, carRear, interior, mirror, skidmarks,
+return { setup, proj, sc, sky, ground, road, carRear, plate, interior, mirror, skidmarks,
          get horizon() { return horizon; }, FAR };
 })();

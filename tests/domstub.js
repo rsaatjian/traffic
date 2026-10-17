@@ -3,6 +3,7 @@ var CLOCK = 0;
 var RAF = [];
 var TIMERS = [];
 var CTX_CALLS = 0;
+var TEXTS = [];
 var ERRORS = [];
 
 function makeGradient() {
@@ -16,7 +17,8 @@ function makeCtx() {
         moveTo: noop, lineTo: noop, arc: noop, arcTo: noop, closePath: noop,
         stroke: noop, fill: noop, save: noop, restore: noop, translate: noop,
         rotate: noop, scale: noop, transform: noop, drawImage: noop,
-        setLineDash: noop, fillText: noop, strokeText: noop, clip: noop,
+        setLineDash: noop, strokeText: noop, clip: noop,
+        fillText: (t) => { CTX_CALLS++; TEXTS.push(String(t)); },
         quadraticCurveTo: noop, bezierCurveTo: noop, ellipse: noop, rect: noop,
         createLinearGradient: () => { CTX_CALLS++; return makeGradient(); },
         createRadialGradient: () => { CTX_CALLS++; return makeGradient(); },
@@ -35,7 +37,10 @@ function makeEl(id, tag) {
         id, tagName: (tag || 'div').toUpperCase(),
         _listeners: {}, _ctx: null,
         textContent: '', value: '', hidden: false, style: {}, src: '', onload: null,
-        width: 300, height: 150, clientWidth: 300, clientHeight: 150,
+        // A realistic viewport, not 300x150: renderers switch on apparent size, and
+        // a tiny stub canvas silently skipped every detail branch (plates, cabins,
+        // wheels, kerbing) so none of it was ever exercised.
+        width: 1200, height: 800, clientWidth: 1200, clientHeight: 800,
         classList: {
             _s: new Set(),
             add(c) { this._s.add(c); }, remove(c) { this._s.delete(c); },
@@ -50,7 +55,7 @@ function makeEl(id, tag) {
         querySelector(sel) { return (this._q ||= {})[sel] ||= makeEl(this.id + sel); },
         addEventListener(type, fn) { (this._listeners[type] ||= []).push(fn); },
         removeEventListener() {},
-        focus() {}, getBoundingClientRect() { return { width: 300, height: 150, left: 0, top: 0 }; },
+        focus() {}, getBoundingClientRect() { return { width: 1200, height: 800, left: 0, top: 0 }; },
         getContext() { return (this._ctx ||= makeCtx()); },
         fire(type, ev) {
             for (const fn of (this._listeners[type] || [])) {

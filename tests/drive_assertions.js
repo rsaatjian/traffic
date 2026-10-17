@@ -67,6 +67,25 @@ ok(!String(ELS['warn'].textContent).includes('NaN'), 'warning text has no NaN');
 // --- no WebAudio under gjs: the sound toggle must degrade, not throw
 ok(true, 'engine audio absent without WebAudio, and did not throw');
 
+// --- a person in front gets their name on their licence plate
+TEXTS.length = 0;
+feed(3, { jam: false, youIdx: 6, youV: 14.0, aheadName: 'mia' });
+ok(TEXTS.some(t => t === 'MIA'), `plate letters the driver's name: ${JSON.stringify(TEXTS.filter(t => /^[A-Z]+$/.test(t)))}`);
+ok(!TEXTS.includes('AUTOPILOT'), 'bots are not given plates');
+
+// a long name must be shrunk to fit, not spill off the plate
+TEXTS.length = 0;
+feed(3, { jam: false, youIdx: 6, youV: 14.0, aheadName: 'bartholomew' });
+ok(TEXTS.some(t => t.startsWith('BARTHOLOME')), `long name is lettered: ${TEXTS.find(t => t.startsWith('BART'))}`);
+ok(!TEXTS.includes('BARTHOLOMEW'), 'the untruncated name is never drawn (plate is capped at 10)');
+
+// the plate itself must be sane geometry at a readable distance
+const ctxP = ELS['view'].getContext('2d');
+Cockpit.setup(ctxP, 900, 640);
+let threw = null;
+try { Cockpit.plate(ctxP, 450, 400, 60, 'mia'); } catch (e) { threw = e.message; }
+ok(threw === null, `plate draws without throwing (${threw || 'ok'})`);
+
 // --- the screen must go red for EITHER side of a contact
 ELS['flash'].classList.remove('on'); ELS['flash'].classList.remove('hard');
 feed(2, { jam: false, youIdx: 6, youV: 14.0, bumpYou: true });
