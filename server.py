@@ -18,6 +18,7 @@ import pathlib
 import re
 import secrets
 import socket
+import time
 
 try:
     import segno                      # pure-python, no transitive deps
@@ -29,6 +30,10 @@ import tornado.web
 import tornado.websocket
 
 import sim
+
+AFK_DEFAULT = 20.0               # seconds; the shipped idle limit
+AFK_SECONDS = AFK_DEFAULT        # live value, set from --afk in main()
+AFK_SWEEP_MS = 2000              # how often we look
 
 SIM_HZ = 60                      # physics steps per second
 BROADCAST_EVERY = 2              # -> 30 Hz on the wire
@@ -96,6 +101,10 @@ class SimHandler(tornado.websocket.WebSocketHandler):
 
     MAX_CLIENTS = 150
 
+    def touch(self) -> None:
+        """Mark this client as being actively driven, right now."""
+        self.last_active = time.monotonic()
+
     def open(self) -> None:
         if len(CLIENTS) >= self.MAX_CLIENTS:
             log.warning("refusing connection: %d clients already", len(CLIENTS))
@@ -104,6 +113,7 @@ class SimHandler(tornado.websocket.WebSocketHandler):
         self.car_id: int | None = None
         self.name = ""
         self.is_host = False
+        self.last_active = time.monotonic()
         CLIENTS.add(self)
         log.info("connect (%d online)", len(CLIENTS))
 
@@ -122,8 +132,16 @@ class SimHandler(tornado.websocket.WebSocketHandler):
             return
 
         if kind == "hello":
+            self.touch()
             self._hello(msg)
+        elif kind == "active":
+            # The drive page cannot rely on input messages to prove someone is there:
+            # throttle is only sent when it CHANGES, so a driver holding the gas down
+            # is silent for as long as they hold it. This is the explicit "a human is
+            # still at the wheel" signal.
+            self.touch()
         elif kind == "input" and self.car_id is not None:
+            self.touch()
             RING.set_input(self.car_id, msg.get("u", 0.0))
         elif kind == "leave" and self.car_id is not None:
             RING.drop(self.car_id)
@@ -287,6 +305,27 @@ class PageHandler(tornado.web.RequestHandler):
         self.write(ASSET_REF.sub(stamp, html))
 
 
+def sweep_afk() -> None:
+    """Take the seat back from anyone who has wandered off.
+
+    Spectators are exempt: the overview screen is supposed to sit there untouched on
+    a projector all lecture. Only clients holding a car are judged.
+    """
+    if AFK_SECONDS <= 0:
+        return
+    now = time.monotonic()
+    for client in list(CLIENTS):
+        if client.car_id is None:
+            continue
+        idle = now - client.last_active
+        if idle > AFK_SECONDS:
+            log.info("%s idle %.0fs -- seat reclaimed", client.name or "driver", idle)
+            RING.drop(client.car_id)
+            client.car_id = None
+            client.send({"type": "kicked", "reason": "afk", "after": AFK_SECONDS})
+            client.close(4001, "idle")
+
+
 def broadcast(obj: dict) -> None:
     payload = json.dumps(obj)
     for client in list(CLIENTS):
@@ -335,11 +374,14 @@ def main() -> None:
                     help="rotate the instructor token (invalidates existing links)")
     ap.add_argument("--pin", default=os.environ.get("DRIVER_PIN", ""),
                     help="require this PIN to drive; defaults to $DRIVER_PIN")
+    ap.add_argument("--afk", type=float, default=AFK_DEFAULT,
+                    help="seconds of inactivity before a seat is reclaimed (0 = never)")
     args = ap.parse_args()
 
-    global HOST_TOKEN, DRIVER_PIN
+    global HOST_TOKEN, DRIVER_PIN, AFK_SECONDS
     HOST_TOKEN = load_host_token(rotate=args.new_token)
     DRIVER_PIN = args.pin
+    AFK_SECONDS = args.afk
 
     logging.basicConfig(
         level=logging.INFO, format="%(asctime)s %(levelname)-5s %(message)s",
@@ -386,6 +428,7 @@ def main() -> None:
         log.info("driver PIN:  %s", DRIVER_PIN)
     log.info("off-network:  ./share.sh   (public URL via a Cloudflare tunnel)")
     tornado.ioloop.PeriodicCallback(tick, 1000.0 / SIM_HZ).start()
+    tornado.ioloop.PeriodicCallback(sweep_afk, AFK_SWEEP_MS).start()
     tornado.ioloop.IOLoop.current().start()
 
 

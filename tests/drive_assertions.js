@@ -67,6 +67,47 @@ ok(!String(ELS['warn'].textContent).includes('NaN'), 'warning text has no NaN');
 // --- no WebAudio under gjs: the sound toggle must degrade, not throw
 ok(true, 'engine audio absent without WebAudio, and did not throw');
 
+// --- AFK reporting. The whole trap here is that throttle is only sent on CHANGE,
+// so a driver holding the gas is silent and must not look idle.
+SENT.length = 0;
+fireWindow('keydown', { key: 'ArrowUp' });
+step(16);
+ok(SENT.some(m => m.type === 'active'), 'pressing a key reports activity');
+
+// hold the key and advance past a heartbeat interval: must keep reporting
+SENT.length = 0;
+const heartbeat = TIMERS.find(t => t && t.ms === 4000);
+ok(!!heartbeat, 'an activity heartbeat is scheduled');
+CLOCK += 3000;                       // get past the 2 s debounce
+heartbeat.fn();
+ok(SENT.some(m => m.type === 'active'),
+   'a driver HOLDING the gas keeps reporting activity (no input message would be sent)');
+
+// let go of everything: the heartbeat must go quiet so the server can reclaim the seat
+fireWindow('keyup', { key: 'ArrowUp' });
+step(16);
+SENT.length = 0;
+CLOCK += 10000;
+heartbeat.fn();
+ok(!SENT.some(m => m.type === 'active'),
+   'an idle driver stops reporting, which is what lets the seat be reclaimed');
+
+// --- being kicked must explain itself
+ELS['joinerr'].hidden = true;
+ELS['join'].classList.add('gone');
+WS.onmessage({ data: JSON.stringify({ type: 'kicked', reason: 'afk', after: 20 }) });
+ok(!ELS['join'].classList.contains('gone'), 'kick returns you to the join screen');
+ok(ELS['joinerr'].hidden === false, 'and says why');
+ok(String(ELS['joinerr'].textContent).includes('20'), `message: ${ELS['joinerr'].textContent}`);
+ok(Net.state.you === null, 'the local car reference is cleared');
+
+// rejoin after a kick
+ELS['name'].value = 'ana';
+ELS['go'].fire('click');
+WS.onopen();
+ok(SENT[SENT.length - 1].type === 'hello', 'can rejoin after being kicked');
+welcome({ you: 7 });
+
 // --- a person in front gets their name on their licence plate
 TEXTS.length = 0;
 feed(3, { jam: false, youIdx: 6, youV: 14.0, aheadName: 'mia' });

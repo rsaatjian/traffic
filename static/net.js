@@ -25,7 +25,8 @@ const state = {
   pred: null,                   // {s, v} predicted own car
 };
 
-const handlers = { welcome: [], state: [], params: [], reset: [], close: [], bump: [] };
+const handlers = { welcome: [], state: [], params: [], reset: [], close: [], bump: [],
+                   kicked: [] };
 const on = (ev, fn) => handlers[ev].push(fn);
 const emit = (ev, a) => { for (const fn of handlers[ev]) fn(a); };
 
@@ -47,6 +48,9 @@ function connect({ drive = false, name = '', pin = '' } = {}) {
       onSnapshot(m);
     } else if (m.type === 'params') {
       applyParams(m.params); emit('params', m.params);
+    } else if (m.type === 'kicked') {
+      state.you = null; state.pred = null;
+      emit('kicked', m);
     }
   };
   ws.onclose = () => { state.connected = false; emit('close'); };

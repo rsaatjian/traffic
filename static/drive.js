@@ -13,6 +13,23 @@ const S = Net.state;
 
 let target = 0, lastFrame = performance.now(), audioOn = false;
 
+/* Proof that somebody is still at the wheel.
+ *
+ * Input messages cannot carry this: throttle is only sent when it CHANGES, so a
+ * driver holding the gas flat is silent for as long as they hold it and would look
+ * exactly like an empty chair. So activity is reported explicitly -- debounced on
+ * real interaction, plus a slow heartbeat for as long as a control is held down. */
+let lastSentActive = 0;
+function touch() {
+  const now = performance.now();
+  if (now - lastSentActive < 2000) return;
+  lastSentActive = now;
+  Net.send({ type: 'active' });
+}
+setInterval(() => {
+  if (keys.size > 0 || target !== 0) touch();     // still holding something
+}, 4000);
+
 /* ---- input: no ramp worth speaking of, no polling. Press -> move. ------------- */
 const keys = new Set();
 function refresh() {
@@ -25,9 +42,9 @@ function refresh() {
 addEventListener('keydown', e => {
   if (!$('join').classList.contains('gone')) return;
   if ([' ', 'ArrowUp', 'ArrowDown'].includes(e.key)) e.preventDefault();
-  if (!keys.has(e.key)) { keys.add(e.key); refresh(); }
+  if (!keys.has(e.key)) { keys.add(e.key); refresh(); touch(); }
 });
-addEventListener('keyup', e => { keys.delete(e.key); refresh(); });
+addEventListener('keyup', e => { keys.delete(e.key); refresh(); touch(); });
 addEventListener('blur', () => { keys.clear(); refresh(); });
 
 function pedal(el, value) {
@@ -36,9 +53,9 @@ function pedal(el, value) {
     $('accel').classList.toggle('held', target > 0);
     $('brake').classList.toggle('held', target < 0);
   };
-  el.addEventListener('pointerdown', e => { e.preventDefault(); set(value); });
+  el.addEventListener('pointerdown', e => { e.preventDefault(); set(value); touch(); });
   for (const ev of ['pointerup', 'pointercancel', 'pointerleave']) {
-    el.addEventListener(ev, e => { e.preventDefault(); set(0); });
+    el.addEventListener(ev, e => { e.preventDefault(); set(0); touch(); });
   }
 }
 pedal($('accel'), 1);
@@ -62,6 +79,15 @@ Net.on('bump', me => {
 });
 let warnTimer = 0, bannerUntil = 0;
 Net.on('close', () => { $('join').classList.remove('gone'); $('go').textContent = 'Reconnect'; });
+
+Net.on('kicked', m => {
+  // say why, or losing the car mid-session looks like a crash or a dropped network
+  $('join').classList.remove('gone');
+  $('go').textContent = 'DRIVE AGAIN';
+  $('joinerr').hidden = false;
+  $('joinerr').textContent =
+    `Seat given up after ${Math.round(m.after || 20)}s idle — someone else may be waiting.`;
+});
 
 Net.on('welcome', m => {
   // a PIN'd ring hands back no car; show the field and say why

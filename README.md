@@ -280,6 +280,17 @@ over 180 s of jamming), so they would just be a column of zeroes.
 
 ## Who is on the ring
 
+**A driver idle for more than 20 seconds loses their seat** (`--afk 20`, `0` disables)
+and is told why, so they can rejoin. That keeps abandoned tabs from holding cars in a
+class where more people want to drive than there are seats.
+
+"Idle" deliberately does not mean "sent no messages". Throttle is only transmitted when
+it *changes*, so someone holding the gas flat is silent for as long as they hold it and
+would look exactly like an empty chair. The drive page reports activity explicitly
+instead — debounced on real key and pedal events, plus a slow heartbeat while a control
+is held. Spectators are exempt: the overview is meant to sit untouched on a projector.
+
+
 A joining driver **takes over the bot in the largest gap**, so the density the
 instructor set does not move. Only when every car already has a person in it does the
 ring grow an extra seat — and that seat disappears again when they leave.
